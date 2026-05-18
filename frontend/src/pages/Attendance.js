@@ -89,30 +89,26 @@ export default function Attendance() {
   };
 
   // استيراد فعلي
-  const handleImport = async () => {
-    if (!selectedFileRef.current) return;
-    setImporting(true);
-    setImportStep('importing');
+ const handleImport = async () => {
+  if (!selectedFileRef.current) return;
+  setImportStep('importing');
 
-    const formData = new FormData();
-    formData.append('file', selectedFileRef.current);
+  const formData = new FormData();
+  formData.append('file', selectedFileRef.current);
 
-    try {
-      const res = await api.post('/attendance/import-excel', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      setImportResult(res.data);
-      setImportStep('done');
-      // تحديث البيانات
-      if (activeTab === 'today') loadToday();
-      else loadMonthly();
-    } catch (err) {
-      setImportResult({ error: err.response?.data?.message || 'فشل الاستيراد' });
-      setImportStep('idle');
-    } finally {
-      setImporting(false);
-    }
-  };
+  try {
+    const res = await api.post('/attendance/import-excel', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    setImportResult(res.data);
+    setImportStep('done');
+    if (activeTab === 'today') loadToday();
+    else loadMonthly();
+  } catch (err) {
+    setImportResult({ error: err.response?.data?.message || 'فشل الاستيراد' });
+    setImportStep('idle');
+  }
+};
 
   const resetImport = () => {
     setImportStep('idle');
