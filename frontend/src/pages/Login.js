@@ -15,28 +15,35 @@ export default function Login() {
     if (token && user) navigate('/', { replace: true });
   }, [navigate]);
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
+ const handleLogin = async (e) => {
+  e.preventDefault();
+  setLoading(true);
+  setError('');
 
-    try {
-      const res = await api.post('/auth/login', {
-        email: email.trim(),
-        password,
-      });
+  try {
+    const res = await api.post('/auth/login', {
+      email: email.trim(),
+      password,
+    });
 
-      localStorage.setItem('token', res.data.token);
-      localStorage.setItem('user', JSON.stringify(res.data.user));
-      navigate('/', { replace: true });
+    const { token, user } = res.data;
 
-    } catch (err) {
-      setError(err.response?.data?.message || 'لا يمكن الاتصال بالخادم — تأكد أن الباكند يعمل');
-    } finally {
-      setLoading(false);
-    }
-  };
+    // حفظ في localStorage
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(user));
 
+    console.log('Login success:', user.role);
+
+    // توجيه مباشر بدون react-router
+    window.location.href = '/';
+
+  } catch (err) {
+    console.error('Login error:', err);
+    setError(err.response?.data?.message || 'لا يمكن الاتصال بالخادم');
+  } finally {
+    setLoading(false);
+  }
+};
   return (
     <div style={{
       minHeight: '100vh',
