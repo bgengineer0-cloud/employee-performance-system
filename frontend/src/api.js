@@ -1,7 +1,10 @@
 import axios from 'axios';
 
+// ── Change this URL to your Render backend URL ──
+const BACKEND_URL = 'https://employee-performance-system-m0wz.onrender.com/api';
+
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
+  baseURL: process.env.REACT_APP_API_URL || BACKEND_URL,
 });
 
 api.interceptors.request.use((config) => {
