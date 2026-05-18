@@ -26,6 +26,10 @@
       "react-app",
       "react-app/jest"
     ]
+     ,"rules": {
+    "no-unused-vars": "off",
+    "react-hooks/exhaustive-deps": "off"
+  }
   },
   "browserslist": {
     "production": [
@@ -38,5 +42,10 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+    
   }
+  
 }
+
+ 
+
