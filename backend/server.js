@@ -58,4 +58,13 @@ mongoose
     console.error('❌ MongoDB connection error:', err.message);
     process.exit(1);
   });
+
+  app.use(cors({
+  origin: [
+    'http://localhost:3000',
+    'https://employee-performance-system.vercel.app',
+    /\.vercel\.app$/,
+  ],
+  credentials: true
+}));
   
