@@ -19,7 +19,7 @@ export default function Attendance() {
   const [importStep, setImportStep] = useState('idle'); // idle | preview | importing | done
   const [previewData, setPreviewData] = useState(null);
   const [importResult, setImportResult] = useState(null);
-  const [importing, setImporting] = useState(false);
+  
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef(null);
   const selectedFileRef = useRef(null);
@@ -55,10 +55,10 @@ export default function Attendance() {
   };
 
   useEffect(() => {
-    if (activeTab === 'today') loadToday();
-    else loadMonthly();
-  }, [activeTab, filterMonth, filterYear]);
-
+  if (activeTab === 'today') loadToday();
+  else loadMonthly();
+  // eslint-disable-next-line
+}, [activeTab, filterMonth, filterYear]);
   // معاينة الملف
   const handleFileSelect = async (file) => {
     if (!file) return;
