@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/employee-performance-system/static/css/main.3a4914e7.css",
+    "main.js": "/employee-performance-system/static/js/main.5a78c8d5.js",
+    "index.html": "/employee-performance-system/index.html",
+    "main.3a4914e7.css.map": "/employee-performance-system/static/css/main.3a4914e7.css.map",
+    "main.5a78c8d5.js.map": "/employee-performance-system/static/js/main.5a78c8d5.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.3a4914e7.css",
+    "static/js/main.5a78c8d5.js"
+  ]
+}
