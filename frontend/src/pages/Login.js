@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../api';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -9,41 +8,50 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // إذا كان مسجلاً بالفعل اذهب للرئيسية
   useEffect(() => {
     const token = localStorage.getItem('token');
     const user = localStorage.getItem('user');
     if (token && user) navigate('/', { replace: true });
   }, [navigate]);
 
- const handleLogin = async (e) => {
-  e.preventDefault();
-  setLoading(true);
-  setError('');
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
 
-  try {
-    const res = await api.post('/auth/login', {
-      email: email.trim(),
-      password,
-    });
+    try {
+      const response = await fetch('http://localhost:5000/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
 
-    const { token, user } = res.data;
+      const data = await response.json();
 
-    // حفظ في localStorage
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(user));
+      if (!response.ok) {
+        setError(data.message || 'بيانات الدخول غير صحيحة');
+        return;
+      }
 
-    console.log('Login success:', user.role);
+      // حفظ التوكن والمستخدم
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
 
-    // توجيه مباشر بدون react-router
-    window.location.href = '/';
+      // توجيه حسب الدور
+      if (data.user.role === 'employee') {
+        navigate('/', { replace: true });
+      } else {
+        navigate('/', { replace: true });
+      }
 
-  } catch (err) {
-    console.error('Login error:', err);
-    setError(err.response?.data?.message || 'لا يمكن الاتصال بالخادم');
-  } finally {
-    setLoading(false);
-  }
-};
+    } catch (err) {
+      setError('لا يمكن الاتصال بالخادم — تأكد أن الباكند يعمل');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -63,6 +71,7 @@ export default function Login() {
         border: '1px solid #eee'
       }}>
 
+        {/* شعار */}
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
           <div style={{
             width: '60px', height: '60px',
@@ -81,6 +90,7 @@ export default function Login() {
           </p>
         </div>
 
+        {/* نموذج الدخول */}
         <form onSubmit={handleLogin}>
           <div style={{ marginBottom: '16px' }}>
             <label style={{ fontSize: '13px', color: '#444', display: 'block', marginBottom: '6px', fontWeight: '500' }}>
@@ -96,7 +106,8 @@ export default function Login() {
                 width: '100%', padding: '11px 14px',
                 border: '1.5px solid #e0e0e0', borderRadius: '10px',
                 fontSize: '14px', direction: 'ltr',
-                outline: 'none', fontFamily: 'inherit'
+                outline: 'none', transition: 'border-color 0.2s',
+                fontFamily: 'inherit'
               }}
               onFocus={e => e.target.style.borderColor = '#1D9E75'}
               onBlur={e => e.target.style.borderColor = '#e0e0e0'}
@@ -117,13 +128,15 @@ export default function Login() {
                 width: '100%', padding: '11px 14px',
                 border: '1.5px solid #e0e0e0', borderRadius: '10px',
                 fontSize: '14px', direction: 'ltr',
-                outline: 'none', fontFamily: 'inherit'
+                outline: 'none', transition: 'border-color 0.2s',
+                fontFamily: 'inherit'
               }}
               onFocus={e => e.target.style.borderColor = '#1D9E75'}
               onBlur={e => e.target.style.borderColor = '#e0e0e0'}
             />
           </div>
 
+          {/* رسالة الخطأ */}
           {error && (
             <div style={{
               background: '#FCEBEB', color: '#A32D2D',
@@ -141,10 +154,13 @@ export default function Login() {
             disabled={loading}
             style={{
               width: '100%', padding: '13px',
-              background: loading ? '#aaa' : 'linear-gradient(135deg, #1D9E75, #0F6E56)',
+              background: loading
+                ? '#aaa'
+                : 'linear-gradient(135deg, #1D9E75, #0F6E56)',
               color: 'white', border: 'none',
               borderRadius: '10px', fontSize: '15px',
               fontWeight: '600', cursor: loading ? 'not-allowed' : 'pointer',
+              transition: 'opacity 0.2s',
               fontFamily: 'inherit',
               boxShadow: loading ? 'none' : '0 4px 12px rgba(29,158,117,0.3)'
             }}
@@ -153,6 +169,7 @@ export default function Login() {
           </button>
         </form>
 
+        {/* بيانات تجريبية */}
         <div style={{
           marginTop: '24px', padding: '14px',
           background: '#f8f9fa', borderRadius: '10px',
@@ -165,6 +182,7 @@ export default function Login() {
             {[
               { role: 'مدير النظام', email: 'admin@company.com', pass: 'admin123', color: '#534AB7' },
               { role: 'مدير', email: 'manager@company.com', pass: 'manager123', color: '#1D9E75' },
+              { role: 'موظف', email: 'sara@company.com', pass: 'sara123', color: '#BA7517' },
             ].map(item => (
               <div
                 key={item.email}
@@ -172,7 +190,7 @@ export default function Login() {
                 style={{
                   display: 'flex', alignItems: 'center', gap: '8px',
                   padding: '6px 10px', borderRadius: '8px',
-                  cursor: 'pointer',
+                  cursor: 'pointer', transition: 'background 0.15s',
                   border: '1px solid #eee', background: 'white'
                 }}
                 onMouseEnter={e => e.currentTarget.style.background = '#f0f7f4'}
@@ -187,6 +205,7 @@ export default function Login() {
             ))}
           </div>
         </div>
+
       </div>
     </div>
   );
