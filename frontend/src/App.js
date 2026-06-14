@@ -1,6 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-
+import { HashRouter as BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
@@ -13,7 +12,8 @@ import Reports from './pages/Reports';
 import Messages from './pages/Messages';
 import Settings from './pages/Settings';
 import UserManagement from './pages/UserManagement';
-
+import Departments from './pages/Departments';
+import ManagerDashboard from './pages/ManagerDashboard';
 // داخل Routes أضف:
 
 // ── helpers ──────────────────────────────────────────
@@ -44,6 +44,7 @@ const HomeRoute = () => {
   const user = getUser();
   if (!user) return <Navigate to="/login" replace />;
   if (user.role === 'employee') return <EmployeeDashboard />;
+  if (user.role === 'manager') return <ManagerDashboard />;
   return <Dashboard />;
 };
 
@@ -90,6 +91,7 @@ function App() {
           <Route path="attendance" element={<AdminRoute><Attendance /></AdminRoute>} />
           <Route path="reports" element={<AdminRoute><Reports /></AdminRoute>} />
 <Route path="users" element={<AdminRoute><UserManagement /></AdminRoute>} />
+<Route path="departments" element={<AdminRoute><Departments /></AdminRoute>} />
           {/* صفحات مشتركة للجميع */}
           <Route path="messages" element={<Messages />} />
           <Route path="settings" element={<Settings />} />

@@ -104,14 +104,13 @@ export default function EmployeeDashboard() {
   };
 
   useEffect(() => {
-    loadTasks();
-    loadContacts();
-    loadUnread();
-
-    // تحديث المهام كل 10 ثوانٍ
-    taskPollRef.current = setInterval(loadTasks, 10000);
-    return () => clearInterval(taskPollRef.current);
-  }, []);
+  loadTasks();
+  loadContacts();
+  loadUnread();
+  taskPollRef.current = setInterval(loadTasks, 10000);
+  return () => clearInterval(taskPollRef.current);
+  // eslint-disable-next-line
+}, []);
 
   // ── جلب المحادثة + polling ────────────────────────
   useEffect(() => {

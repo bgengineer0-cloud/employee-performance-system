@@ -13,8 +13,9 @@ const evaluationRoutes = require('./routes/evaluationRoutes');
 const attendanceRoutes = require('./routes/attendanceRoutes');
 const reportRoutes = require('./routes/reportRoutes');
 const messageRoutes = require('./routes/messageRoutes');
-
+const departmentRoutes = require('./routes/departmentRoutes');
 const app = express();
+
 
 // ── Middleware ──────────────────────────────────────────────
 app.use(cors({ origin: 'http://localhost:3000', credentials: true }));
@@ -30,6 +31,7 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/departments', departmentRoutes);
 // ── Health check ────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });

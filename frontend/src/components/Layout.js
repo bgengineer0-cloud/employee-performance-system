@@ -29,25 +29,37 @@ export default function Layout() {
 
   // قائمة التنقل حسب الدور
   const adminNav = [
+  { path: '/', label: 'لوحة التحكم', icon: '⊞' },
+  { path: '/departments', label: 'الأقسام', icon: '🏢' },
+  { path: '/employees', label: 'الموظفون', icon: '👥' },
+  { path: '/tasks', label: 'المهام', icon: '✓' },
+  { path: '/evaluation', label: 'التقييمات', icon: '★' },
+  { path: '/attendance', label: 'الحضور', icon: '🗓' },
+  { path: '/reports', label: 'التقارير', icon: '📊' },
+  { path: '/users', label: 'المستخدمون', icon: '🔐' },
+  { path: '/messages', label: 'الرسائل', icon: '✉', dynamic: true },
+  { path: '/settings', label: 'الإعدادات', icon: '⚙' },
+];
+
+const managerNav = [
     { path: '/', label: 'لوحة التحكم', icon: '⊞' },
     { path: '/employees', label: 'الموظفون', icon: '👥' },
-    { path: '/users', label: 'المستخدمون', icon: '🔐' },
     { path: '/tasks', label: 'المهام', icon: '✓' },
     { path: '/evaluation', label: 'التقييمات', icon: '★' },
-    { path: '/attendance', label: 'الحضور', icon: '🗓' },
-    { path: '/reports', label: 'التقارير', icon: '📊' },
     { path: '/messages', label: 'الرسائل', icon: '✉', dynamic: true },
-    { path: '/settings', label: 'الإعدادات', icon: '⚙' },
+    
   ];
-
   const employeeNav = [
     { path: '/', label: 'لوحتي', icon: '⊞' },
     { path: '/messages', label: 'رسائلي', icon: '✉', dynamic: true },
     { path: '/settings', label: 'الإعدادات', icon: '⚙' },
   ];
 
-  const navItems = isEmployee ? employeeNav : adminNav;
-
+const navItems = user.role === 'employee' 
+  ? employeeNav 
+  : user.role === 'manager'
+  ? managerNav
+  : adminNav;
   // اسم الصفحة الحالية
   const pageNames = {
     '/': isEmployee ? 'لوحتي' : 'لوحة التحكم',

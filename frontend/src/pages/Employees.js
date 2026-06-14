@@ -8,18 +8,10 @@ const statusMap = {
   terminated: { label: 'منتهي', color: '#666', bg: '#f0f0f0' }
 };
 
-const departments = [
-  'تقنية المعلومات',
-  'الموارد البشرية',
-  'المالية',
-  'المبيعات',
-  'خدمة العملاء'
-];
-
 const emptyForm = {
   name: '',
   email: '',
-  department: 'تقنية المعلومات',
+  department: '',
   position: '',
   phone: '',
   hireDate: new Date().toISOString().split('T')[0],
@@ -28,6 +20,7 @@ const emptyForm = {
 
 export default function Employees() {
   const [employees, setEmployees] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [deptFilter, setDeptFilter] = useState('');
@@ -39,9 +32,13 @@ export default function Employees() {
 
   const load = () => {
     setLoading(true);
-    api.get('/employees')
-      .then(res => setEmployees(res.data.employees || []))
-      .catch(() => setError('فشل تحميل الموظفين'))
+    Promise.all([
+      api.get('/employees'),
+      api.get('/departments')
+    ]).then(([empRes, deptRes]) => {
+      setEmployees(empRes.data.employees || []);
+      setDepartments(deptRes.data.departments || []);
+    }).catch(() => setError('فشل تحميل البيانات'))
       .finally(() => setLoading(false));
   };
 
@@ -62,26 +59,11 @@ export default function Employees() {
     setError('');
     setMsg('');
 
-    if (!form.name.trim()) {
-      setError('الاسم مطلوب');
-      setSaving(false);
-      return;
-    }
-    if (!form.email.trim()) {
-      setError('البريد الإلكتروني مطلوب');
-      setSaving(false);
-      return;
-    }
-    if (!form.position.trim()) {
-      setError('المسمى الوظيفي مطلوب');
-      setSaving(false);
-      return;
-    }
-    if (!form.hireDate) {
-      setError('تاريخ التعيين مطلوب');
-      setSaving(false);
-      return;
-    }
+    if (!form.name.trim()) { setError('الاسم مطلوب'); setSaving(false); return; }
+    if (!form.email.trim()) { setError('البريد الإلكتروني مطلوب'); setSaving(false); return; }
+    if (!form.department) { setError('يرجى اختيار القسم'); setSaving(false); return; }
+    if (!form.position.trim()) { setError('المسمى الوظيفي مطلوب'); setSaving(false); return; }
+    if (!form.hireDate) { setError('تاريخ التعيين مطلوب'); setSaving(false); return; }
 
     try {
       const res = await api.post('/employees', {
@@ -96,35 +78,33 @@ export default function Employees() {
 
       const { loginInfo } = res.data;
       setMsg(
-        `✓ تم إضافة "${form.name}" — بيانات الدخول: ` +
-        `${loginInfo.email} / ${loginInfo.password}`
+        `✓ تم إضافة "${form.name}" — بيانات الدخول: ${loginInfo.email} / ${loginInfo.password}`
       );
-      setForm(emptyForm);
+      setForm({ ...emptyForm, department: form.department });
       setShowForm(false);
       load();
-      setTimeout(() => setMsg(''), 10000);
-
+      setTimeout(() => setMsg(''), 15000);
     } catch (err) {
-      setError(err.response?.data?.message || 'حدث خطأ أثناء إضافة الموظف');
+      setError(err.response?.data?.message || 'حدث خطأ');
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (id, name) => {
-    if (!window.confirm(`هل تريد إنهاء خدمة الموظف "${name}"؟`)) return;
+    if (!window.confirm(`هل تريد إنهاء خدمة "${name}"؟`)) return;
     try {
       await api.delete(`/employees/${id}`);
       setMsg(`تم إنهاء خدمة ${name}`);
       load();
-      setTimeout(() => setMsg(''), 3000);
     } catch (err) {
       setError('فشل الحذف');
     }
   };
 
   return (
-    <div>
+    <div style={{ fontFamily: 'Segoe UI, Tahoma, sans-serif', direction: 'rtl' }}>
+
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <div>
@@ -134,12 +114,32 @@ export default function Employees() {
           </div>
         </div>
         <button
-          onClick={() => { setShowForm(!showForm); setError(''); }}
+          onClick={() => {
+            if (departments.length === 0) {
+              setError('يرجى إضافة قسم أولاً من صفحة الأقسام');
+              return;
+            }
+            setShowForm(!showForm);
+            setError('');
+          }}
           style={{ padding: '9px 18px', background: '#1D9E75', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '500' }}
         >
           {showForm ? '✕ إغلاق' : '+ موظف جديد'}
         </button>
       </div>
+
+      {/* تنبيه إذا لم توجد أقسام */}
+      {departments.length === 0 && !loading && (
+        <div style={{ background: '#FAEEDA', border: '1px solid #f0d9a0', borderRadius: '10px', padding: '14px 18px', marginBottom: '16px', fontSize: '13px', color: '#633806', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ fontSize: '20px' }}>⚠</span>
+          <div>
+            <strong>لا توجد أقسام بعد.</strong> يجب إضافة قسم أولاً قبل إضافة موظفين.
+            <a href="/departments" style={{ color: '#534AB7', marginRight: '8px', fontWeight: '500' }}>
+              اذهب إلى صفحة الأقسام ←
+            </a>
+          </div>
+        </div>
+      )}
 
       {/* Alerts */}
       {msg && (
@@ -150,14 +150,14 @@ export default function Employees() {
       {error && (
         <div style={{ background: '#FCEBEB', color: '#A32D2D', padding: '10px 14px', borderRadius: '8px', marginBottom: '14px', fontSize: '13px', border: '1px solid #f5c2c2' }}>
           ⚠ {error}
-          <button onClick={() => setError('')} style={{ marginRight: '8px', background: 'none', border: 'none', cursor: 'pointer', color: '#A32D2D', fontWeight: '700' }}>✕</button>
+          <button onClick={() => setError('')} style={{ marginRight: '8px', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '700', color: '#A32D2D' }}>✕</button>
         </div>
       )}
 
-      {/* Add Form */}
-      {showForm && (
+      {/* نموذج الإضافة */}
+      {showForm && departments.length > 0 && (
         <div style={{ background: 'white', borderRadius: '12px', padding: '20px', border: '1px solid #ddd', marginBottom: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-          <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '16px', color: '#333' }}>
+          <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '16px' }}>
             إضافة موظف جديد
           </h3>
           <form onSubmit={handleSubmit}>
@@ -190,6 +190,24 @@ export default function Employees() {
 
               <div>
                 <label style={{ fontSize: '12px', color: '#555', display: 'block', marginBottom: '4px', fontWeight: '500' }}>
+                  القسم <span style={{ color: 'red' }}>*</span>
+                </label>
+                <select
+                  value={form.department}
+                  onChange={e => setForm({ ...form, department: e.target.value })}
+                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', direction: 'rtl' }}
+                >
+                  <option value="">اختر القسم</option>
+                  {departments.map(d => (
+                    <option key={d._id} value={d.name}>
+                      {d.icon} {d.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '12px', color: '#555', display: 'block', marginBottom: '4px', fontWeight: '500' }}>
                   المسمى الوظيفي <span style={{ color: 'red' }}>*</span>
                 </label>
                 <input
@@ -198,19 +216,6 @@ export default function Employees() {
                   placeholder="مثال: مطور برمجيات"
                   style={{ width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', outline: 'none', direction: 'rtl' }}
                 />
-              </div>
-
-              <div>
-                <label style={{ fontSize: '12px', color: '#555', display: 'block', marginBottom: '4px', fontWeight: '500' }}>
-                  القسم <span style={{ color: 'red' }}>*</span>
-                </label>
-                <select
-                  value={form.department}
-                  onChange={e => setForm({ ...form, department: e.target.value })}
-                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', direction: 'rtl' }}
-                >
-                  {departments.map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
               </div>
 
               <div>
@@ -244,7 +249,7 @@ export default function Employees() {
                 <select
                   value={form.status}
                   onChange={e => setForm({ ...form, status: e.target.value })}
-                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', direction: 'rtl' }}
+                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px' }}
                 >
                   <option value="active">نشط</option>
                   <option value="absent">غائب</option>
@@ -253,6 +258,13 @@ export default function Employees() {
               </div>
 
             </div>
+
+            {/* معاينة بيانات الدخول */}
+            {form.name && (
+              <div style={{ marginTop: '12px', padding: '10px 14px', background: '#E1F5EE', borderRadius: '8px', fontSize: '12px', color: '#0F6E56' }}>
+                🔑 كلمة المرور الافتراضية ستكون: <strong>{form.name.replace(/\s+/g, '').slice(0, 6) + '123'}</strong>
+              </div>
+            )}
 
             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #f0f0f0' }}>
               <button
@@ -274,7 +286,7 @@ export default function Employees() {
         </div>
       )}
 
-      {/* Filters */}
+      {/* فلاتر */}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '14px' }}>
         <input
           placeholder="🔍 ابحث بالاسم أو الرقم الوظيفي..."
@@ -285,17 +297,31 @@ export default function Employees() {
         <select
           value={deptFilter}
           onChange={e => setDeptFilter(e.target.value)}
-          style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', minWidth: '160px' }}
+          style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', minWidth: '180px' }}
         >
           <option value="">جميع الأقسام</option>
-          {departments.map(d => <option key={d} value={d}>{d}</option>)}
+          {departments.map(d => (
+            <option key={d._id} value={d.name}>{d.icon} {d.name}</option>
+          ))}
         </select>
       </div>
 
-      {/* Table */}
+      {/* الجدول */}
       <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', overflow: 'hidden' }}>
         {loading ? (
           <div style={{ padding: '40px', textAlign: 'center', color: '#888' }}>جارٍ التحميل...</div>
+        ) : filtered.length === 0 ? (
+          <div style={{ padding: '50px', textAlign: 'center', color: '#aaa' }}>
+            <div style={{ fontSize: '40px', marginBottom: '12px' }}>👥</div>
+            <div style={{ fontSize: '14px', fontWeight: '500' }}>
+              {employees.length === 0 ? 'لا يوجد موظفون بعد' : 'لا توجد نتائج للبحث'}
+            </div>
+            {employees.length === 0 && departments.length > 0 && (
+              <div style={{ fontSize: '12px', color: '#bbb', marginTop: '6px' }}>
+                اضغط "موظف جديد" لإضافة أول موظف
+              </div>
+            )}
+          </div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
             <thead>
@@ -310,16 +336,15 @@ export default function Employees() {
             <tbody>
               {filtered.map(emp => {
                 const s = statusMap[emp.status] || statusMap.active;
+                const dept = departments.find(d => d.name === emp.department);
                 return (
-                  <tr
-                    key={emp._id}
-                    style={{ borderBottom: '1px solid #f5f5f5' }}
+                  <tr key={emp._id} style={{ borderBottom: '1px solid #f5f5f5' }}
                     onMouseEnter={e => e.currentTarget.style.background = '#fafafa'}
                     onMouseLeave={e => e.currentTarget.style.background = 'white'}
                   >
                     <td style={{ padding: '12px 14px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#E1F5EE', color: '#085041', fontSize: '11px', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: (dept?.color || '#1D9E75') + '20', color: dept?.color || '#085041', fontSize: '11px', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                           {emp.name?.slice(0, 2)}
                         </div>
                         <div>
@@ -332,8 +357,8 @@ export default function Employees() {
                       {emp.employeeId}
                     </td>
                     <td style={{ padding: '12px 14px' }}>
-                      <span style={{ background: '#f0f0f0', padding: '3px 8px', borderRadius: '6px', fontSize: '12px' }}>
-                        {emp.department}
+                      <span style={{ background: (dept?.color || '#888') + '15', color: dept?.color || '#888', padding: '3px 10px', borderRadius: '6px', fontSize: '12px' }}>
+                        {dept?.icon} {emp.department}
                       </span>
                     </td>
                     <td style={{ padding: '12px 14px', color: '#555' }}>{emp.position}</td>
@@ -345,16 +370,9 @@ export default function Employees() {
                     <td style={{ padding: '12px 14px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <div style={{ width: '80px', height: '6px', background: '#f0f0f0', borderRadius: '999px', overflow: 'hidden' }}>
-                          <div style={{
-                            width: `${emp.taskCompletionRate || 0}%`,
-                            height: '100%',
-                            background: (emp.taskCompletionRate || 0) >= 80 ? '#1D9E75' : (emp.taskCompletionRate || 0) >= 50 ? '#EF9F27' : '#E24B4A',
-                            borderRadius: '999px'
-                          }} />
+                          <div style={{ width: `${emp.taskCompletionRate || 0}%`, height: '100%', background: (emp.taskCompletionRate || 0) >= 80 ? '#1D9E75' : (emp.taskCompletionRate || 0) >= 50 ? '#EF9F27' : '#E24B4A', borderRadius: '999px' }} />
                         </div>
-                        <span style={{ fontSize: '12px', color: '#555', minWidth: '30px' }}>
-                          {emp.taskCompletionRate || 0}%
-                        </span>
+                        <span style={{ fontSize: '12px', color: '#555' }}>{emp.taskCompletionRate || 0}%</span>
                       </div>
                     </td>
                     <td style={{ padding: '12px 14px' }}>
@@ -368,13 +386,6 @@ export default function Employees() {
                   </tr>
                 );
               })}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: '#aaa' }}>
-                    {search || deptFilter ? 'لا توجد نتائج للبحث' : 'لا يوجد موظفون بعد'}
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         )}
