@@ -1,4 +1,4 @@
-import React, { useState, useEffect} from 'react';
+import React, { useState, useEffect ,  useCallback } from 'react';
 import api from '../api';
 
 const statusMap = {
@@ -61,7 +61,7 @@ export default function ManagerDashboard() {
   // Credentials popup
   const [newCredentials, setNewCredentials] = useState(null);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -92,7 +92,7 @@ export default function ManagerDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
 
 
