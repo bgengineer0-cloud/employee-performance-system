@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect} from 'react';
 import api from '../api';
 
 const statusMap = {
@@ -94,7 +94,11 @@ export default function ManagerDashboard() {
     }
   };
 
-  useEffect(() => { loadData(); }, []);
+
+
+useEffect(() => {
+  loadData();
+}, [loadData]);
 
   // ── إضافة موظف ──────────────────────────────────
   const handleAddEmployee = async (e) => {
@@ -196,7 +200,7 @@ export default function ManagerDashboard() {
 
   // إحصائيات
   const completedTasks = tasks.filter(t => t.status === 'completed').length;
-  const overdueTasks = tasks.filter(t => t.status === 'overdue').length;
+  //const overdueTasks = tasks.filter(t => t.status === 'overdue').length;
   const inProgressTasks = tasks.filter(t => t.status === 'in_progress').length;
   const deptColor = department?.color || '#1D9E75';
 
