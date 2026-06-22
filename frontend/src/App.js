@@ -1,9 +1,12 @@
-import React from 'react';
-import { HashRouter as BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+
 import Login from './pages/Login';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import EmployeeDashboard from './pages/EmployeeDashboard';
+import ManagerDashboard from './pages/ManagerDashboard';
+import Departments from './pages/Departments';
 import Employees from './pages/Employees';
 import Tasks from './pages/Tasks';
 import Evaluation from './pages/Evaluation';
@@ -12,94 +15,78 @@ import Reports from './pages/Reports';
 import Messages from './pages/Messages';
 import Settings from './pages/Settings';
 import UserManagement from './pages/UserManagement';
-import Departments from './pages/Departments';
-import ManagerDashboard from './pages/ManagerDashboard';
-// داخل Routes أضف:
 
-// ── helpers ──────────────────────────────────────────
-const getUser = () => {
-  try {
-    return JSON.parse(localStorage.getItem('user') || 'null');
-  } catch {
-    return null;
-  }
-};
-
-const getToken = () => localStorage.getItem('token');
-
-// ── Guards ───────────────────────────────────────────
-
-// إذا لم يكن مسجلاً → اذهب لصفحة الدخول
-const PrivateRoute = ({ children }) => {
-  return getToken() && getUser() ? children : <Navigate to="/login" replace />;
-};
-
-// إذا كان مسجلاً بالفعل → لا ترجع لصفحة الدخول
-const PublicRoute = ({ children }) => {
-  return getToken() && getUser() ? <Navigate to="/" replace /> : children;
-};
-
-// الصفحة الرئيسية حسب الدور
-const HomeRoute = () => {
-  const user = getUser();
-  if (!user) return <Navigate to="/login" replace />;
-  if (user.role === 'employee') return <EmployeeDashboard />;
-  if (user.role === 'manager') return <ManagerDashboard />;
-  return <Dashboard />;
-};
-
-// حماية الصفحات الإدارية من الموظف
-const AdminRoute = ({ children }) => {
-  const user = getUser();
-  if (!user) return <Navigate to="/login" replace />;
-  if (user.role === 'employee') return <Navigate to="/" replace />;
-  return children;
-};
-
-// ── App ──────────────────────────────────────────────
 function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
+  const checkAuth = () => {
+    try {
+      const token = localStorage.getItem('token');
+      const userStr = localStorage.getItem('user');
+      if (token && userStr) {
+        setUser(JSON.parse(userStr));
+        setIsLoggedIn(true);
+      } else {
+        setIsLoggedIn(false);
+        setUser(null);
+      }
+    } catch {
+      setIsLoggedIn(false);
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f0f7f4' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ width: '40px', height: '40px', border: '3px solid #f0f0f0', borderTop: '3px solid #1D9E75', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 16px' }} />
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+          <div style={{ color: '#888', fontSize: '14px' }}>جارٍ التحميل...</div>
+        </div>
+      </div>
+    );
+  }
+
+  const isEmployee = user?.role === 'employee';
+  const isManager = user?.role === 'manager';
+
   return (
     <BrowserRouter>
       <Routes>
-
-        {/* صفحة الدخول — عامة فقط */}
         <Route
           path="/login"
-          element={
-            <PublicRoute>
-              <Login />
-            </PublicRoute>
-          }
+          element={isLoggedIn ? <Navigate to="/" replace /> : <Login onLogin={checkAuth} />}
         />
 
-        {/* الصفحات المحمية */}
         <Route
           path="/"
-          element={
-            <PrivateRoute>
-              <Layout />
-            </PrivateRoute>
-          }
+          element={isLoggedIn ? <Layout /> : <Navigate to="/login" replace />}
         >
-          {/* الصفحة الرئيسية — حسب الدور */}
-          <Route index element={<HomeRoute />} />
-
-          {/* صفحات إدارية فقط */}
-          <Route path="employees" element={<AdminRoute><Employees /></AdminRoute>} />
-          <Route path="tasks" element={<AdminRoute><Tasks /></AdminRoute>} />
-          <Route path="evaluation" element={<AdminRoute><Evaluation /></AdminRoute>} />
-          <Route path="attendance" element={<AdminRoute><Attendance /></AdminRoute>} />
-          <Route path="reports" element={<AdminRoute><Reports /></AdminRoute>} />
-<Route path="users" element={<AdminRoute><UserManagement /></AdminRoute>} />
-<Route path="departments" element={<AdminRoute><Departments /></AdminRoute>} />
-          {/* صفحات مشتركة للجميع */}
+          <Route
+            index
+            element={isEmployee ? <EmployeeDashboard /> : isManager ? <ManagerDashboard /> : <Dashboard />}
+          />
+          <Route path="departments" element={isEmployee || isManager ? <Navigate to="/" replace /> : <Departments />} />
+          <Route path="employees" element={isEmployee || isManager ? <Navigate to="/" replace /> : <Employees />} />
+          <Route path="tasks" element={isEmployee || isManager ? <Navigate to="/" replace /> : <Tasks />} />
+          <Route path="evaluation" element={isEmployee || isManager ? <Navigate to="/" replace /> : <Evaluation />} />
+          <Route path="attendance" element={isEmployee || isManager ? <Navigate to="/" replace /> : <Attendance />} />
+          <Route path="reports" element={isEmployee || isManager ? <Navigate to="/" replace /> : <Reports />} />
+          <Route path="users" element={isEmployee || isManager ? <Navigate to="/" replace /> : <UserManagement />} />
           <Route path="messages" element={<Messages />} />
           <Route path="settings" element={<Settings />} />
         </Route>
 
-        {/* أي مسار غير معروف → الرئيسية */}
         <Route path="*" element={<Navigate to="/" replace />} />
-
       </Routes>
     </BrowserRouter>
   );
