@@ -6,30 +6,36 @@ const User = require('../models/User');
 const Employee = require('../models/Employee');
 const bcrypt = require('bcryptjs');
 // GET /api/departments/available-managers — موظفون بمنصب "مدير" بدون قسم مُدار حالياً
+// GET /api/departments/available-managers — كل الموظفين (لاختيار أي منهم كمدير)
 router.get('/available-managers', protect, authorize('admin'), async (req, res) => {
   try {
-    // جلب كل الموظفين الذين منصبهم يحتوي على "مدير"
-    const potentialManagers = await Employee.find({
-      position: { $regex: 'مدير', $options: 'i' },
+    // جلب كل الموظفين النشطين
+    const employees = await Employee.find({
       status: { $ne: 'terminated' }
-    });
+    }).sort({ name: 1 });
 
-    // جلب الأقسام الحالية لمعرفة من هو مدير فعلاً الآن
+    // جلب الأقسام الحالية لمعرفة من هو مدير فعلاً الآن (role: manager)
     const departments = await Department.find({ isActive: true });
     const assignedManagerEmails = departments
       .filter(d => d.managerEmail)
       .map(d => d.managerEmail);
 
-    const available = potentialManagers.map(emp => ({
+    // جلب أدوار المستخدمين الحاليين لمعرفة من هو manager بالفعل
+    const users = await User.find({ email: { $in: employees.map(e => e.email) } });
+    const userRoleMap = {};
+    users.forEach(u => { userRoleMap[u.email] = u.role; });
+
+    const result = employees.map(emp => ({
       _id: emp._id,
       name: emp.name,
       email: emp.email,
       department: emp.department,
       position: emp.position,
+      currentRole: userRoleMap[emp.email] || 'employee',
       isCurrentlyManaging: assignedManagerEmails.includes(emp.email),
     }));
 
-    res.json({ success: true, employees: available });
+    res.json({ success: true, employees: result });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -148,8 +154,6 @@ router.post('/', protect, authorize('admin'), async (req, res) => {
   try {
     const { name, description, color, icon, managerId } = req.body;
 
-    console.log('📥 Received department data:', req.body);
-
     const existing = await Department.findOne({ name: name.trim() });
     if (existing) {
       return res.status(400).json({
@@ -163,7 +167,6 @@ router.post('/', protect, authorize('admin'), async (req, res) => {
     let managerEmail = '';
     let managerCredentials = null;
 
-    // إذا تم اختيار موظف ليكون مديراً
     if (managerId) {
       const selectedEmployee = await Employee.findById(managerId);
       if (!selectedEmployee) {
@@ -173,22 +176,19 @@ router.post('/', protect, authorize('admin'), async (req, res) => {
       managerName = selectedEmployee.name;
       managerEmail = selectedEmployee.email;
 
-      // تحديث قسم الموظف ليصبح هذا القسم
+      // نقل الموظف لهذا القسم (بدون تغيير المسمى الوظيفي)
       selectedEmployee.department = name.trim();
-      selectedEmployee.position = 'مدير القسم';
       await selectedEmployee.save();
 
-      // تحقق إذا كان لديه حساب User بالفعل
+      // رفع الدور (role) فقط إلى manager
       let managerUser = await User.findOne({ email: managerEmail });
 
       if (managerUser) {
-        // تحديث الحساب الموجود ليصبح مدير
         managerUser.role = 'manager';
         managerUser.department = name.trim();
         await managerUser.save();
-        console.log('✅ Existing user upgraded to manager:', managerUser.email);
+        console.log('✅ User role upgraded to manager:', managerUser.email);
       } else {
-        // إنشاء حساب جديد له
         const password = managerName.replace(/\s+/g, '').slice(0, 6) + '123';
         const hash = await bcrypt.hash(password, 10);
         managerUser = await User.create({
@@ -485,7 +485,7 @@ router.put('/:id', protect, authorize('admin'), async (req, res) => {
       }
 
       selectedEmployee.department = dept.name;
-      selectedEmployee.position = 'مدير القسم';
+     
       await selectedEmployee.save();
 
       let managerUser = await User.findOne({ email: selectedEmployee.email });

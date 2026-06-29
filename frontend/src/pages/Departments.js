@@ -210,35 +210,24 @@ export default function Departments() {
             </div>
 
             {/* اختيار المدير من قائمة الموظفين */}
-            <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '16px', marginBottom: '16px' }}>
-              <div style={{ fontSize: '13px', fontWeight: '600', color: '#333', marginBottom: '10px' }}>
-                👤 مدير القسم (اختياري)
-              </div>
-
-              {availableManagers.length === 0 ? (
-                <div style={{ background: '#FAEEDA', border: '1px solid #f0d9a0', borderRadius: '8px', padding: '12px 14px', fontSize: '12px', color: '#633806' }}>
-                  لا يوجد موظفون بمنصب "مدير" بعد. أضف موظفاً بمنصب يحتوي على كلمة "مدير" من صفحة الموظفين أولاً، ثم عُد لاختياره هنا.
-                </div>
-              ) : (
-                <select
-                  value={form.managerId}
-                  onChange={e => setForm({ ...form, managerId: e.target.value })}
-                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', direction: 'rtl' }}
-                >
-                  <option value="">بدون مدير حالياً</option>
-                  {availableManagers.map(emp => (
-                    <option key={emp._id} value={emp._id} disabled={emp.isCurrentlyManaging && emp._id !== editingDept?.manager}>
-                      {emp.name} — {emp.position} ({emp.department})
-                      {emp.isCurrentlyManaging ? ' — يدير قسماً آخر حالياً' : ''}
-                    </option>
-                  ))}
-                </select>
-              )}
-
-              <div style={{ fontSize: '11px', color: '#888', marginTop: '6px' }}>
-                💡 سيتم نقل الموظف المختار إلى هذا القسم تلقائياً وتفعيل صلاحيات المدير له
-              </div>
-            </div>
+           <select
+  value={form.managerId}
+  onChange={e => setForm({ ...form, managerId: e.target.value })}
+  style={{ width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', direction: 'rtl' }}
+>
+  <option value="">بدون مدير حالياً</option>
+  {availableManagers.map(emp => (
+    <option
+      key={emp._id}
+      value={emp._id}
+      disabled={emp.isCurrentlyManaging && emp._id !== editingDept?.manager}
+    >
+      {emp.name} — {emp.position} ({emp.department})
+      {emp.currentRole === 'manager' ? ' 🔑 مدير حالياً' : ''}
+      {emp.isCurrentlyManaging ? ' — يدير قسماً آخر حالياً' : ''}
+    </option>
+  ))}
+</select>
 
             {/* معاينة */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: '#f9f9f9', borderRadius: '8px', marginBottom: '16px' }}>
