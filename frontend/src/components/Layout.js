@@ -43,11 +43,8 @@ export default function Layout() {
 
 const managerNav = [
     { path: '/', label: 'لوحة التحكم', icon: '⊞' },
-    { path: '/employees', label: 'الموظفون', icon: '👥' },
-    { path: '/tasks', label: 'المهام', icon: '✓' },
-    { path: '/evaluation', label: 'التقييمات', icon: '★' },
     { path: '/messages', label: 'الرسائل', icon: '✉', dynamic: true },
-    
+    { path: '/settings', label: 'الإعدادات', icon: '⚙' },
   ];
   const employeeNav = [
     { path: '/', label: 'لوحتي', icon: '⊞' },
