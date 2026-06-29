@@ -10,6 +10,7 @@ const ICONS = ['🏢', '💻', '💰', '📊', '🎯', '⚙️', '👥', '📱',
 
 export default function Departments() {
   const [departments, setDepartments] = useState([]);
+  const [availableManagers, setAvailableManagers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingDept, setEditingDept] = useState(null);
@@ -23,26 +24,25 @@ export default function Departments() {
     description: '',
     color: '#1D9E75',
     icon: '🏢',
-    managerName: '',
-    managerEmail: '',
-    managerPassword: '',
+    managerId: '',
   });
 
   const load = () => {
     setLoading(true);
-    api.get('/departments')
-      .then(res => setDepartments(res.data.departments || []))
-      .catch(() => setError('فشل تحميل الأقسام'))
+    Promise.all([
+      api.get('/departments'),
+      api.get('/departments/available-managers')
+    ]).then(([deptRes, mgrRes]) => {
+      setDepartments(deptRes.data.departments || []);
+      setAvailableManagers(mgrRes.data.employees || []);
+    }).catch(() => setError('فشل تحميل البيانات'))
       .finally(() => setLoading(false));
   };
 
   useEffect(() => { load(); }, []);
 
   const resetForm = () => {
-    setForm({
-      name: '', description: '', color: '#1D9E75', icon: '🏢',
-      managerName: '', managerEmail: '', managerPassword: '',
-    });
+    setForm({ name: '', description: '', color: '#1D9E75', icon: '🏢', managerId: '' });
     setEditingDept(null);
     setError('');
   };
@@ -55,14 +55,13 @@ export default function Departments() {
 
     try {
       if (editingDept) {
-        await api.put(`/departments/${editingDept._id}`, form);
+        const res = await api.put(`/departments/${editingDept._id}`, form);
         setMsg('✓ تم تحديث القسم بنجاح');
+        if (res.data.managerCredentials) setNewCredentials(res.data.managerCredentials);
       } else {
         const res = await api.post('/departments', form);
         setMsg('✓ تم إنشاء القسم بنجاح');
-        if (res.data.managerCredentials) {
-          setNewCredentials(res.data.managerCredentials);
-        }
+        if (res.data.managerCredentials) setNewCredentials(res.data.managerCredentials);
       }
       resetForm();
       setShowForm(false);
@@ -76,12 +75,15 @@ export default function Departments() {
   };
 
   const handleDelete = async (dept) => {
-    if (!window.confirm(`هل تريد حذف قسم "${dept.name}"؟`)) return;
+    const confirmMsg = dept.employeeCount > 0
+      ? `⚠ تحذير: قسم "${dept.name}" يحتوي على ${dept.employeeCount} موظف.\n\nسيتم حذف جميع الموظفين وبياناتهم وحساباتهم نهائياً.\n\nهل أنت متأكد؟`
+      : `هل تريد حذف قسم "${dept.name}"؟`;
+    if (!window.confirm(confirmMsg)) return;
     try {
-      await api.delete(`/departments/${dept._id}`);
-      setMsg(`✓ تم حذف قسم ${dept.name}`);
+      const res = await api.delete(`/departments/${dept._id}`);
+      setMsg(`✓ ${res.data.message}`);
       load();
-      setTimeout(() => setMsg(''), 3000);
+      setTimeout(() => setMsg(''), 6000);
     } catch (err) {
       setError(err.response?.data?.message || 'فشل الحذف');
     }
@@ -94,9 +96,7 @@ export default function Departments() {
       description: dept.description || '',
       color: dept.color || '#1D9E75',
       icon: dept.icon || '🏢',
-      managerName: dept.managerName || '',
-      managerEmail: dept.managerEmail || '',
-      managerPassword: '',
+      managerId: dept.manager?._id || dept.manager || '',
     });
     setShowForm(true);
     setError('');
@@ -105,7 +105,6 @@ export default function Departments() {
   return (
     <div style={{ fontFamily: 'Segoe UI, Tahoma, sans-serif', direction: 'rtl' }}>
 
-      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <div>
           <h1 style={{ fontSize: '20px', fontWeight: '600' }}>إدارة الأقسام</h1>
@@ -121,26 +120,21 @@ export default function Departments() {
         </button>
       </div>
 
-      {/* بيانات الدخول الجديدة */}
       {newCredentials && (
         <div style={{ background: '#E1F5EE', border: '1px solid #b2dfdb', borderRadius: '12px', padding: '16px 20px', marginBottom: '16px' }}>
           <div style={{ fontSize: '14px', fontWeight: '600', color: '#0F6E56', marginBottom: '10px' }}>
-            ✅ تم إنشاء حساب مدير القسم — احفظ هذه البيانات
+            ✅ تم إنشاء حساب دخول جديد للمدير — احفظ هذه البيانات
           </div>
           <div style={{ display: 'flex', gap: '20px', fontSize: '13px' }}>
             <div><strong>البريد:</strong> <code style={{ background: '#f0f0f0', padding: '2px 8px', borderRadius: '4px' }}>{newCredentials.email}</code></div>
             <div><strong>كلمة المرور:</strong> <code style={{ background: '#f0f0f0', padding: '2px 8px', borderRadius: '4px' }}>{newCredentials.password}</code></div>
           </div>
-          <button
-            onClick={() => setNewCredentials(null)}
-            style={{ marginTop: '10px', background: 'none', border: '1px solid #1D9E75', color: '#1D9E75', padding: '4px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }}
-          >
+          <button onClick={() => setNewCredentials(null)} style={{ marginTop: '10px', background: 'none', border: '1px solid #1D9E75', color: '#1D9E75', padding: '4px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }}>
             فهمت — إغلاق
           </button>
         </div>
       )}
 
-      {/* Alerts */}
       {msg && <div style={{ background: '#E1F5EE', color: '#0F6E56', padding: '10px 14px', borderRadius: '8px', marginBottom: '14px', fontSize: '13px', border: '1px solid #b2dfdb' }}>{msg}</div>}
       {error && (
         <div style={{ background: '#FCEBEB', color: '#A32D2D', padding: '10px 14px', borderRadius: '8px', marginBottom: '14px', fontSize: '13px', border: '1px solid #f5c2c2' }}>
@@ -149,7 +143,6 @@ export default function Departments() {
         </div>
       )}
 
-      {/* نموذج الإضافة/التعديل */}
       {showForm && (
         <div style={{ background: 'white', borderRadius: '12px', padding: '20px', border: '1px solid #ddd', marginBottom: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
           <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '16px' }}>
@@ -158,7 +151,6 @@ export default function Departments() {
           <form onSubmit={handleSubmit}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
 
-              {/* اسم القسم */}
               <div>
                 <label style={{ fontSize: '12px', color: '#555', display: 'block', marginBottom: '4px', fontWeight: '500' }}>
                   اسم القسم <span style={{ color: 'red' }}>*</span>
@@ -171,7 +163,6 @@ export default function Departments() {
                 />
               </div>
 
-              {/* الوصف */}
               <div>
                 <label style={{ fontSize: '12px', color: '#555', display: 'block', marginBottom: '4px', fontWeight: '500' }}>
                   وصف القسم
@@ -184,7 +175,6 @@ export default function Departments() {
                 />
               </div>
 
-              {/* اللون */}
               <div>
                 <label style={{ fontSize: '12px', color: '#555', display: 'block', marginBottom: '6px', fontWeight: '500' }}>
                   لون القسم
@@ -200,7 +190,6 @@ export default function Departments() {
                 </div>
               </div>
 
-              {/* الأيقونة */}
               <div>
                 <label style={{ fontSize: '12px', color: '#555', display: 'block', marginBottom: '6px', fontWeight: '500' }}>
                   أيقونة القسم
@@ -220,54 +209,36 @@ export default function Departments() {
 
             </div>
 
-            {/* معلومات مدير القسم */}
-            {!editingDept && (
-              <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '16px', marginBottom: '16px' }}>
-                <div style={{ fontSize: '13px', fontWeight: '600', color: '#333', marginBottom: '12px' }}>
-                  👤 بيانات مدير القسم (اختياري)
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
-                  <div>
-                    <label style={{ fontSize: '12px', color: '#555', display: 'block', marginBottom: '4px', fontWeight: '500' }}>
-                      اسم المدير
-                    </label>
-                    <input
-                      value={form.managerName}
-                      onChange={e => setForm({ ...form, managerName: e.target.value })}
-                      placeholder="الاسم الكامل"
-                      style={{ width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', outline: 'none', direction: 'rtl' }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: '12px', color: '#555', display: 'block', marginBottom: '4px', fontWeight: '500' }}>
-                      البريد الإلكتروني
-                    </label>
-                    <input
-                      type="email"
-                      value={form.managerEmail}
-                      onChange={e => setForm({ ...form, managerEmail: e.target.value })}
-                      placeholder="manager@company.com"
-                      style={{ width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', outline: 'none', direction: 'ltr' }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: '12px', color: '#555', display: 'block', marginBottom: '4px', fontWeight: '500' }}>
-                      كلمة المرور
-                    </label>
-                    <input
-                      type="text"
-                      value={form.managerPassword}
-                      onChange={e => setForm({ ...form, managerPassword: e.target.value })}
-                      placeholder="اتركها فارغة للتلقائية"
-                      style={{ width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', outline: 'none', direction: 'ltr' }}
-                    />
-                  </div>
-                </div>
-                <div style={{ fontSize: '11px', color: '#888', marginTop: '6px' }}>
-                  💡 إذا تركت هذه الحقول فارغة يمكنك إضافة مدير لاحقاً من صفحة المستخدمين
-                </div>
+            {/* اختيار المدير من قائمة الموظفين */}
+            <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '16px', marginBottom: '16px' }}>
+              <div style={{ fontSize: '13px', fontWeight: '600', color: '#333', marginBottom: '10px' }}>
+                👤 مدير القسم (اختياري)
               </div>
-            )}
+
+              {availableManagers.length === 0 ? (
+                <div style={{ background: '#FAEEDA', border: '1px solid #f0d9a0', borderRadius: '8px', padding: '12px 14px', fontSize: '12px', color: '#633806' }}>
+                  لا يوجد موظفون بمنصب "مدير" بعد. أضف موظفاً بمنصب يحتوي على كلمة "مدير" من صفحة الموظفين أولاً، ثم عُد لاختياره هنا.
+                </div>
+              ) : (
+                <select
+                  value={form.managerId}
+                  onChange={e => setForm({ ...form, managerId: e.target.value })}
+                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', direction: 'rtl' }}
+                >
+                  <option value="">بدون مدير حالياً</option>
+                  {availableManagers.map(emp => (
+                    <option key={emp._id} value={emp._id} disabled={emp.isCurrentlyManaging && emp._id !== editingDept?.manager}>
+                      {emp.name} — {emp.position} ({emp.department})
+                      {emp.isCurrentlyManaging ? ' — يدير قسماً آخر حالياً' : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              <div style={{ fontSize: '11px', color: '#888', marginTop: '6px' }}>
+                💡 سيتم نقل الموظف المختار إلى هذا القسم تلقائياً وتفعيل صلاحيات المدير له
+              </div>
+            </div>
 
             {/* معاينة */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: '#f9f9f9', borderRadius: '8px', marginBottom: '16px' }}>
@@ -276,7 +247,11 @@ export default function Departments() {
               </div>
               <div>
                 <div style={{ fontSize: '14px', fontWeight: '600', color: form.color }}>{form.name || 'اسم القسم'}</div>
-                <div style={{ fontSize: '12px', color: '#888' }}>{form.description || 'وصف القسم'}</div>
+                <div style={{ fontSize: '12px', color: '#888' }}>
+                  {form.managerId
+                    ? availableManagers.find(m => m._id === form.managerId)?.name
+                    : 'بدون مدير'}
+                </div>
               </div>
             </div>
 
@@ -292,18 +267,12 @@ export default function Departments() {
         </div>
       )}
 
-      {/* قائمة الأقسام */}
       {loading ? (
         <div style={{ textAlign: 'center', padding: '50px', color: '#aaa' }}>جارٍ التحميل...</div>
       ) : departments.length === 0 ? (
         <div style={{ background: 'white', borderRadius: '12px', padding: '60px', textAlign: 'center', border: '1px solid #eee' }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏢</div>
-          <div style={{ fontSize: '16px', fontWeight: '500', color: '#555', marginBottom: '8px' }}>
-            لا توجد أقسام بعد
-          </div>
-          <div style={{ fontSize: '13px', color: '#aaa', marginBottom: '16px' }}>
-            أضف أول قسم في المنظمة
-          </div>
+          <div style={{ fontSize: '16px', fontWeight: '500', color: '#555', marginBottom: '8px' }}>لا توجد أقسام بعد</div>
           <button onClick={() => setShowForm(true)} style={{ padding: '10px 24px', background: '#1D9E75', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '500' }}>
             + إضافة قسم
           </button>
@@ -311,13 +280,7 @@ export default function Departments() {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
           {departments.map(dept => (
-            <div
-              key={dept._id}
-              style={{ background: 'white', borderRadius: '14px', border: '1px solid #eee', overflow: 'hidden', transition: 'box-shadow 0.2s' }}
-              onMouseEnter={e => e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.08)'}
-              onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}
-            >
-              {/* رأس البطاقة */}
+            <div key={dept._id} style={{ background: 'white', borderRadius: '14px', border: '1px solid #eee', overflow: 'hidden' }}>
               <div style={{ background: dept.color + '15', padding: '16px', borderBottom: `3px solid ${dept.color}`, display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: dept.color + '25', border: `2px solid ${dept.color}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', flexShrink: 0 }}>
                   {dept.icon}
@@ -330,13 +293,10 @@ export default function Departments() {
                 </div>
               </div>
 
-              {/* معلومات البطاقة */}
               <div style={{ padding: '14px 16px' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
                   <div style={{ background: '#f9f9f9', borderRadius: '8px', padding: '10px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '20px', fontWeight: '700', color: dept.color }}>
-                      {dept.employeeCount || 0}
-                    </div>
+                    <div style={{ fontSize: '20px', fontWeight: '700', color: dept.color }}>{dept.employeeCount || 0}</div>
                     <div style={{ fontSize: '11px', color: '#888' }}>موظف</div>
                   </div>
                   <div style={{ background: '#f9f9f9', borderRadius: '8px', padding: '10px', textAlign: 'center' }}>
@@ -353,18 +313,11 @@ export default function Departments() {
                   </div>
                 )}
 
-                {/* الأزرار */}
                 <div style={{ display: 'flex', gap: '6px' }}>
-                  <button
-                    onClick={() => openEdit(dept)}
-                    style={{ flex: 1, padding: '7px', background: dept.color + '15', color: dept.color, border: `1px solid ${dept.color}40`, borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: '500' }}
-                  >
+                  <button onClick={() => openEdit(dept)} style={{ flex: 1, padding: '7px', background: dept.color + '15', color: dept.color, border: `1px solid ${dept.color}40`, borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: '500' }}>
                     ✏ تعديل
                   </button>
-                  <button
-                    onClick={() => handleDelete(dept)}
-                    style={{ flex: 1, padding: '7px', background: '#FCEBEB', color: '#A32D2D', border: '1px solid #f5c2c2', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: '500' }}
-                  >
+                  <button onClick={() => handleDelete(dept)} style={{ flex: 1, padding: '7px', background: '#FCEBEB', color: '#A32D2D', border: '1px solid #f5c2c2', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: '500' }}>
                     🗑 حذف
                   </button>
                 </div>

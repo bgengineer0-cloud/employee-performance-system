@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import api from '../api';
 
+
 // ── مكوّن شريط بياني ────────────────────────────────
 const BarChart = ({ data, height = 120 }) => {
   const max = Math.max(...data.map(d => d.value), 1);
@@ -166,7 +167,13 @@ export default function Dashboard() {
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
+const [deptStats, setDeptStats] = useState({ stats: {}, departmentDistribution: [] });
 
+useEffect(() => {
+  api.get('/reports/dashboard')
+    .then(res => setDeptStats(res.data))
+    .catch(() => {});
+}, []);
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '400px', flexDirection: 'column', gap: '16px' }}>
@@ -464,6 +471,33 @@ export default function Dashboard() {
         </table>
       </div>
 
+    
+
+  {/* توزيع الموظفين على الأقسام */}
+<div style={{ background: 'white', borderRadius: '12px', padding: '18px', border: '1px solid #eee' }}>
+  <h3 style={{ fontSize: '14px', fontWeight: '500', marginBottom: '16px' }}>توزيع الموظفين على الأقسام</h3>
+  {deptStats.departmentDistribution?.length === 0 ? (
+    <div style={{ textAlign: 'center', color: '#aaa', padding: '30px', fontSize: '13px' }}>
+      لا توجد أقسام مضافة بعد
     </div>
-  );
-}
+  ) : (
+    deptStats.departmentDistribution?.map(dept => {
+      const total = deptStats.stats?.totalEmployees || 1;
+      const pct = Math.round((dept.count / total) * 100);
+      return (
+        <div key={dept.name} style={{ marginBottom: '12px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '5px' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span>{dept.icon}</span> {dept.name}
+            </span>
+            <span style={{ color: dept.color, fontWeight: '600' }}>{dept.count} ({pct}%)</span>
+          </div>
+          <div style={{ height: '7px', background: '#f0f0f0', borderRadius: '999px', overflow: 'hidden' }}>
+            <div style={{ width: `${pct}%`, height: '100%', background: dept.color, borderRadius: '999px', transition: 'width 0.4s' }} />
+          </div>
+        </div>
+      );
+    })
+  )}
+</div></div>
+  );}

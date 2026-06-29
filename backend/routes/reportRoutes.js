@@ -5,7 +5,121 @@ const Employee = require('../models/Employee');
 const Task = require('../models/Task');
 const Evaluation = require('../models/Evaluation');
 const Attendance = require('../models/Attendance');
+const Department = require('../models/Department');
 
+
+// GET /api/reports/department-performance — أداء كل قسم
+router.get('/department-performance', protect, async (req, res) => {
+  try {
+    const departments = await Department.find({ isActive: true });
+
+    const report = await Promise.all(
+      departments.map(async (dept) => {
+        const employees = await Employee.find({
+          department: dept.name,
+          status: { $ne: 'terminated' }
+        });
+
+        const employeeIds = employees.map(e => e._id);
+
+        const tasks = await Task.find({ assignedTo: { $in: employeeIds } });
+        const completedTasks = tasks.filter(t => t.status === 'completed').length;
+        const overdueTasks = tasks.filter(t => t.status === 'overdue').length;
+        const inProgressTasks = tasks.filter(t => t.status === 'in_progress').length;
+
+        const completionRate = tasks.length > 0
+          ? Math.round((completedTasks / tasks.length) * 100)
+          : 0;
+
+        // حساب الحضور لآخر 30 يوم
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+        const attendanceRecords = await Attendance.find({
+          employee: { $in: employeeIds },
+          date: { $gte: thirtyDaysAgo }
+        });
+
+        const presentCount = attendanceRecords.filter(a => a.status === 'present').length;
+        const attendanceRate = attendanceRecords.length > 0
+          ? Math.round((presentCount / attendanceRecords.length) * 100)
+          : 0;
+
+        // متوسط تقييم الأداء
+        const avgPerformance = employees.length > 0
+          ? Math.round(
+              employees.reduce((sum, e) => sum + (e.performanceScore || 0), 0) / employees.length
+            )
+          : 0;
+
+        return {
+          _id: dept._id,
+          name: dept.name,
+          icon: dept.icon,
+          color: dept.color,
+          managerName: dept.managerName,
+          employeeCount: employees.length,
+          totalTasks: tasks.length,
+          completedTasks,
+          inProgressTasks,
+          overdueTasks,
+          completionRate,
+          attendanceRate,
+          avgPerformance,
+        };
+      })
+    );
+
+    res.json({ success: true, departments: report });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+// GET /api/reports/dashboard — إحصائيات لوحة التحكم
+router.get('/dashboard', protect, async (req, res) => {
+  try {
+    const departments = await Department.find({ isActive: true });
+    const totalEmployees = await Employee.countDocuments({ status: { $ne: 'terminated' } });
+    const totalTasks = await Task.countDocuments();
+    const completedTasks = await Task.countDocuments({ status: 'completed' });
+    const overdueTasks = await Task.countDocuments({ status: 'overdue' });
+    const inProgressTasks = await Task.countDocuments({ status: 'in_progress' });
+    const pendingTasks = await Task.countDocuments({ status: 'pending' });
+
+    // توزيع الموظفين على الأقسام
+    const departmentDistribution = await Promise.all(
+      departments.map(async (dept) => {
+        const count = await Employee.countDocuments({
+          department: dept.name,
+          status: { $ne: 'terminated' }
+        });
+        return {
+          name: dept.name,
+          icon: dept.icon,
+          color: dept.color,
+          count,
+        };
+      })
+    );
+
+    res.json({
+      success: true,
+      stats: {
+        totalDepartments: departments.length,
+        totalEmployees,
+        totalTasks,
+        completedTasks,
+        overdueTasks,
+        inProgressTasks,
+        pendingTasks,
+        taskCompletionRate: totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0,
+      },
+      departmentDistribution,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
 router.get('/dashboard', protect, async (req, res) => {
   try {
     const totalEmployees = await Employee.countDocuments({ status: { $ne: 'terminated' } });

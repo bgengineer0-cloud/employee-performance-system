@@ -91,7 +91,7 @@ export default function Employees() {
     }
   };
 
-  const handleDelete = async (id, name) => {
+ /* const handleDelete = async (id, name) => {
     if (!window.confirm(`هل تريد إنهاء خدمة "${name}"؟`)) return;
     try {
       await api.delete(`/employees/${id}`);
@@ -100,7 +100,18 @@ export default function Employees() {
     } catch (err) {
       setError('فشل الحذف');
     }
-  };
+  };*/
+  const handleDelete = async (id, name, email) => {
+  if (!window.confirm(`⚠ هل تريد حذف "${name}" نهائياً؟\n\nسيتم حذف بريده (${email}) وحسابه وجميع بياناته نهائياً، ويمكن استخدام نفس البريد لموظف آخر لاحقاً.`)) return;
+  try {
+    const res = await api.delete(`/employees/${id}`);
+    setMsg(`✓ ${res.data.message}`);
+    load();
+    setTimeout(() => setMsg(''), 5000);
+  } catch (err) {
+    setError(err.response?.data?.message || 'فشل الحذف');
+  }
+};
 
   return (
     <div style={{ fontFamily: 'Segoe UI, Tahoma, sans-serif', direction: 'rtl' }}>
@@ -376,12 +387,9 @@ export default function Employees() {
                       </div>
                     </td>
                     <td style={{ padding: '12px 14px' }}>
-                      <button
-                        onClick={() => handleDelete(emp._id, emp.name)}
-                        style={{ padding: '4px 10px', background: '#FCEBEB', color: '#A32D2D', border: '1px solid #f5c2c2', borderRadius: '6px', cursor: 'pointer', fontSize: '11px' }}
-                      >
-                        إنهاء الخدمة
-                      </button>
+                    <button onClick={() => handleDelete(emp._id, emp.name, emp.email)} style={{ padding: '4px 10px', background: '#FCEBEB', color: '#A32D2D', border: '1px solid #f5c2c2', borderRadius: '6px', cursor: 'pointer', fontSize: '11px' }}>
+  🗑 حذف نهائي
+</button>
                     </td>
                   </tr>
                 );

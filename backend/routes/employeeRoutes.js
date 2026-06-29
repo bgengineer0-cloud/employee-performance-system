@@ -3,12 +3,10 @@ const router = express.Router();
 const { getEmployees, getEmployee, createEmployee, updateEmployee, deleteEmployee } = require('../controllers/employeeController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 const Employee = require('../models/Employee');
-
 router.get('/', protect, getEmployees);
 router.get('/:id', protect, getEmployee);
 router.post('/', protect, authorize('admin', 'manager'), createEmployee);
 router.put('/:id', protect, authorize('admin', 'manager'), updateEmployee);
-router.delete('/:id', protect, authorize('admin'), deleteEmployee);
 // جلب موظف بالإيميل
 router.get('/by-email/:email', protect, async (req, res) => {
   try {
@@ -121,6 +119,119 @@ router.get('/by-email/:email', protect, async (req, res) => {
     const employee = await Employee.findOne({ email: req.params.email });
     res.json({ success: true, employee });
   } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+// DELETE /api/employees/:id — حذف موظف نهائياً (مع حسابه وبريده)
+router.delete('/:id', protect, authorize('admin', 'manager'), async (req, res) => {
+  try {
+    const employee = await Employee.findById(req.params.id);
+    if (!employee) {
+      return res.status(404).json({ success: false, message: 'الموظف غير موجود' });
+    }
+
+    // إذا كان مديراً يحذف موظفاً، تأكد أنه من قسمه فقط
+    if (req.user.role === 'manager' && employee.department !== req.user.department) {
+      return res.status(403).json({ success: false, message: 'لا يمكنك حذف موظف من قسم آخر' });
+    }
+
+    console.log(`🗑 Permanently deleting employee: ${employee.name} (${employee.email})`);
+
+    // حذف المهام المرتبطة
+    const Task = require('../models/Task');
+    const tasksDeleted = await Task.deleteMany({ assignedTo: employee._id });
+
+    // حذف سجلات الحضور
+    const Attendance = require('../models/Attendance');
+    const attendanceDeleted = await Attendance.deleteMany({ employee: employee._id });
+
+    // حذف التقييمات
+    const Evaluation = require('../models/Evaluation');
+    const evalDeleted = await Evaluation.deleteMany({ employee: employee._id });
+
+    // حذف حساب المستخدم المرتبط (نفس البريد) — هذا يحرر البريد للاستخدام مجدداً
+    const User = require('../models/User');
+    const userDeleted = await User.findOneAndDelete({ email: employee.email });
+
+    // حذف الرسائل المرتبطة بحساب هذا المستخدم
+    if (userDeleted) {
+      const Message = require('../models/Message');
+      await Message.deleteMany({
+        $or: [
+          { sender: userDeleted._id },
+          { recipient: userDeleted._id }
+        ]
+      });
+    }
+
+    // حذف سجل الموظف نفسه نهائياً
+    await Employee.findByIdAndDelete(req.params.id);
+
+    console.log(`✅ Employee "${employee.name}" and email "${employee.email}" freed for reuse`);
+
+    res.json({
+      success: true,
+      message: `تم حذف "${employee.name}" نهائياً — يمكن استخدام بريده الإلكتروني لموظف آخر`,
+      freedEmail: employee.email,
+    });
+  } catch (error) {
+    console.error('❌ Error deleting employee:', error.message);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+router.delete('/:id', protect, authorize('admin', 'manager'), async (req, res) => {
+  try {
+    console.log('🔍 DELETE request received for employee ID:', req.params.id);
+    
+    const employee = await Employee.findById(req.params.id);
+    if (!employee) {
+      console.log('❌ Employee not found');
+      return res.status(404).json({ success: false, message: 'الموظف غير موجود' });
+    }
+
+    console.log('✅ Found employee:', employee.name, employee.email);
+
+    if (req.user.role === 'manager' && employee.department !== req.user.department) {
+      return res.status(403).json({ success: false, message: 'لا يمكنك حذف موظف من قسم آخر' });
+    }
+
+    console.log(`🗑 Permanently deleting employee: ${employee.name} (${employee.email})`);
+
+    const Task = require('../models/Task');
+    const tasksDeleted = await Task.deleteMany({ assignedTo: employee._id });
+    console.log('🗑 Tasks deleted:', tasksDeleted.deletedCount);
+
+    const Attendance = require('../models/Attendance');
+    const attendanceDeleted = await Attendance.deleteMany({ employee: employee._id });
+    console.log('🗑 Attendance deleted:', attendanceDeleted.deletedCount);
+
+    const Evaluation = require('../models/Evaluation');
+    const evalDeleted = await Evaluation.deleteMany({ employee: employee._id });
+    console.log('🗑 Evaluations deleted:', evalDeleted.deletedCount);
+
+    const User = require('../models/User');
+    const userDeleted = await User.findOneAndDelete({ email: employee.email });
+    console.log('🗑 User account deleted:', userDeleted ? userDeleted.email : 'none found');
+
+    if (userDeleted) {
+      const Message = require('../models/Message');
+      const msgDel = await Message.deleteMany({
+        $or: [{ sender: userDeleted._id }, { recipient: userDeleted._id }]
+      });
+      console.log('🗑 Messages deleted:', msgDel.deletedCount);
+    }
+
+    const empResult = await Employee.findByIdAndDelete(req.params.id);
+    console.log('✅✅✅ Employee deleted successfully:', empResult?.name);
+
+    res.json({
+      success: true,
+      message: `تم حذف "${employee.name}" نهائياً — يمكن استخدام بريده الإلكتروني لموظف آخر`,
+      freedEmail: employee.email,
+    });
+  } catch (error) {
+    console.error('❌❌❌ Error deleting employee:', error.message);
+    console.error(error.stack);
     res.status(500).json({ success: false, message: error.message });
   }
 });

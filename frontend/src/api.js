@@ -1,7 +1,9 @@
 import axios from 'axios';
 
-const BACKEND_URL = 'https://employee-performance-api-wn5g.onrender.com/api';
-
+//const BACKEND_URL = 'https://employee-performance-api-wn5g.onrender.com/api';
+const BACKEND_URL = process.env.NODE_ENV === 'production'
+  ? 'https://employee-performance-api-wn5g.onrender.com/api'
+  : 'http://localhost:5000/api';
 const api = axios.create({
   baseURL: BACKEND_URL,
 });
