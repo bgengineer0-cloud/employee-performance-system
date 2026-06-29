@@ -122,6 +122,60 @@ router.get('/by-email/:email', protect, async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
+// PUT /api/employees/:id — تعديل بيانات موظف
+router.put('/:id', protect, authorize('admin', 'manager'), async (req, res) => {
+  try {
+    const employee = await Employee.findById(req.params.id);
+    if (!employee) {
+      return res.status(404).json({ success: false, message: 'الموظف غير موجود' });
+    }
+
+    if (req.user.role === 'manager' && employee.department !== req.user.department) {
+      return res.status(403).json({ success: false, message: 'لا يمكنك تعديل موظف من قسم آخر' });
+    }
+
+    const { name, email, department, position, phone, hireDate, status, notes } = req.body;
+
+    const oldEmail = employee.email;
+
+    if (name) employee.name = name.trim();
+    if (email) employee.email = email.trim().toLowerCase();
+    if (department) employee.department = department;
+    if (position) employee.position = position.trim();
+    if (phone !== undefined) employee.phone = phone.trim();
+    if (hireDate) employee.hireDate = hireDate;
+    if (status) employee.status = status;
+    if (notes !== undefined) employee.notes = notes;
+
+    // إذا تغيّر الإيميل، تحقق أنه غير مستخدم من قبل موظف آخر
+    if (email && email.trim().toLowerCase() !== oldEmail) {
+      const existing = await Employee.findOne({ email: email.trim().toLowerCase(), _id: { $ne: employee._id } });
+      if (existing) {
+        return res.status(400).json({ success: false, message: 'البريد الإلكتروني مستخدم لموظف آخر' });
+      }
+    }
+
+    await employee.save();
+
+    // تحديث الحساب المرتبط (User) إذا تغيّر الاسم أو الإيميل أو القسم
+    const User = require('../models/User');
+    const userAccount = await User.findOne({ email: oldEmail });
+    if (userAccount) {
+      if (name) userAccount.name = name.trim();
+      if (email) userAccount.email = email.trim().toLowerCase();
+      if (department) userAccount.department = department;
+      await userAccount.save();
+    }
+
+    res.json({ success: true, message: 'تم تحديث بيانات الموظف', employee });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({ success: false, message: 'البريد الإلكتروني مستخدم مسبقاً' });
+    }
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
 // DELETE /api/employees/:id — حذف موظف نهائياً (مع حسابه وبريده)
 router.delete('/:id', protect, authorize('admin', 'manager'), async (req, res) => {
   try {

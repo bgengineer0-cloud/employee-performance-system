@@ -25,6 +25,7 @@ export default function Employees() {
   const [search, setSearch] = useState('');
   const [deptFilter, setDeptFilter] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [editingEmp, setEditingEmp] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
@@ -53,6 +54,27 @@ export default function Employees() {
     return matchSearch && matchDept;
   });
 
+  const resetForm = () => {
+    setForm(emptyForm);
+    setEditingEmp(null);
+    setError('');
+  };
+
+  const openEdit = (emp) => {
+    setEditingEmp(emp);
+    setForm({
+      name: emp.name,
+      email: emp.email,
+      department: emp.department,
+      position: emp.position,
+      phone: emp.phone || '',
+      hireDate: emp.hireDate ? new Date(emp.hireDate).toISOString().split('T')[0] : '',
+      status: emp.status,
+    });
+    setShowForm(true);
+    setError('');
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -66,21 +88,32 @@ export default function Employees() {
     if (!form.hireDate) { setError('تاريخ التعيين مطلوب'); setSaving(false); return; }
 
     try {
-      const res = await api.post('/employees', {
-        name: form.name.trim(),
-        email: form.email.trim().toLowerCase(),
-        department: form.department,
-        position: form.position.trim(),
-        phone: form.phone.trim(),
-        hireDate: form.hireDate,
-        status: form.status,
-      });
+      if (editingEmp) {
+        await api.put(`/employees/${editingEmp._id}`, {
+          name: form.name.trim(),
+          email: form.email.trim().toLowerCase(),
+          department: form.department,
+          position: form.position.trim(),
+          phone: form.phone.trim(),
+          hireDate: form.hireDate,
+          status: form.status,
+        });
+        setMsg(`✓ تم تحديث بيانات "${form.name}" بنجاح`);
+      } else {
+        const res = await api.post('/employees', {
+          name: form.name.trim(),
+          email: form.email.trim().toLowerCase(),
+          department: form.department,
+          position: form.position.trim(),
+          phone: form.phone.trim(),
+          hireDate: form.hireDate,
+          status: form.status,
+        });
+        const { loginInfo } = res.data;
+        setMsg(`✓ تم إضافة "${form.name}" — بيانات الدخول: ${loginInfo.email} / ${loginInfo.password}`);
+      }
 
-      const { loginInfo } = res.data;
-      setMsg(
-        `✓ تم إضافة "${form.name}" — بيانات الدخول: ${loginInfo.email} / ${loginInfo.password}`
-      );
-      setForm({ ...emptyForm, department: form.department });
+      resetForm();
       setShowForm(false);
       load();
       setTimeout(() => setMsg(''), 15000);
@@ -91,27 +124,17 @@ export default function Employees() {
     }
   };
 
- /* const handleDelete = async (id, name) => {
-    if (!window.confirm(`هل تريد إنهاء خدمة "${name}"؟`)) return;
-    try {
-      await api.delete(`/employees/${id}`);
-      setMsg(`تم إنهاء خدمة ${name}`);
-      load();
-    } catch (err) {
-      setError('فشل الحذف');
-    }
-  };*/
   const handleDelete = async (id, name, email) => {
-  if (!window.confirm(`⚠ هل تريد حذف "${name}" نهائياً؟\n\nسيتم حذف بريده (${email}) وحسابه وجميع بياناته نهائياً، ويمكن استخدام نفس البريد لموظف آخر لاحقاً.`)) return;
-  try {
-    const res = await api.delete(`/employees/${id}`);
-    setMsg(`✓ ${res.data.message}`);
-    load();
-    setTimeout(() => setMsg(''), 5000);
-  } catch (err) {
-    setError(err.response?.data?.message || 'فشل الحذف');
-  }
-};
+    if (!window.confirm(`⚠ هل تريد حذف "${name}" نهائياً؟\n\nسيتم حذف بريده (${email}) وحسابه وجميع بياناته نهائياً، ويمكن استخدام نفس البريد لموظف آخر لاحقاً.`)) return;
+    try {
+      const res = await api.delete(`/employees/${id}`);
+      setMsg(`✓ ${res.data.message}`);
+      load();
+      setTimeout(() => setMsg(''), 5000);
+    } catch (err) {
+      setError(err.response?.data?.message || 'فشل الحذف');
+    }
+  };
 
   return (
     <div style={{ fontFamily: 'Segoe UI, Tahoma, sans-serif', direction: 'rtl' }}>
@@ -130,8 +153,8 @@ export default function Employees() {
               setError('يرجى إضافة قسم أولاً من صفحة الأقسام');
               return;
             }
+            resetForm();
             setShowForm(!showForm);
-            setError('');
           }}
           style={{ padding: '9px 18px', background: '#1D9E75', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '500' }}
         >
@@ -145,9 +168,6 @@ export default function Employees() {
           <span style={{ fontSize: '20px' }}>⚠</span>
           <div>
             <strong>لا توجد أقسام بعد.</strong> يجب إضافة قسم أولاً قبل إضافة موظفين.
-            <a href="/departments" style={{ color: '#534AB7', marginRight: '8px', fontWeight: '500' }}>
-              اذهب إلى صفحة الأقسام ←
-            </a>
           </div>
         </div>
       )}
@@ -165,11 +185,11 @@ export default function Employees() {
         </div>
       )}
 
-      {/* نموذج الإضافة */}
+      {/* نموذج الإضافة/التعديل */}
       {showForm && departments.length > 0 && (
         <div style={{ background: 'white', borderRadius: '12px', padding: '20px', border: '1px solid #ddd', marginBottom: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
           <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '16px' }}>
-            إضافة موظف جديد
+            {editingEmp ? `تعديل بيانات: ${editingEmp.name}` : 'إضافة موظف جديد'}
           </h3>
           <form onSubmit={handleSubmit}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -270,17 +290,23 @@ export default function Employees() {
 
             </div>
 
-            {/* معاينة بيانات الدخول */}
-            {form.name && (
+            {/* معاينة بيانات الدخول — فقط عند الإضافة */}
+            {!editingEmp && form.name && (
               <div style={{ marginTop: '12px', padding: '10px 14px', background: '#E1F5EE', borderRadius: '8px', fontSize: '12px', color: '#0F6E56' }}>
                 🔑 كلمة المرور الافتراضية ستكون: <strong>{form.name.replace(/\s+/g, '').slice(0, 6) + '123'}</strong>
+              </div>
+            )}
+
+            {editingEmp && (
+              <div style={{ marginTop: '12px', padding: '10px 14px', background: '#EEEDFE', borderRadius: '8px', fontSize: '12px', color: '#534AB7' }}>
+                ℹ تعديل البريد الإلكتروني سيُحدّث أيضاً بيانات تسجيل الدخول للموظف
               </div>
             )}
 
             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #f0f0f0' }}>
               <button
                 type="button"
-                onClick={() => { setShowForm(false); setForm(emptyForm); setError(''); }}
+                onClick={() => { setShowForm(false); resetForm(); }}
                 style={{ padding: '9px 20px', border: '1px solid #ddd', borderRadius: '8px', background: 'white', cursor: 'pointer', fontSize: '13px' }}
               >
                 إلغاء
@@ -290,7 +316,7 @@ export default function Employees() {
                 disabled={saving}
                 style={{ padding: '9px 24px', background: saving ? '#aaa' : '#1D9E75', color: 'white', border: 'none', borderRadius: '8px', cursor: saving ? 'not-allowed' : 'pointer', fontSize: '13px', fontWeight: '500' }}
               >
-                {saving ? '⏳ جارٍ الحفظ...' : '✓ إضافة الموظف'}
+                {saving ? '⏳ جارٍ الحفظ...' : editingEmp ? '✓ حفظ التعديلات' : '✓ إضافة الموظف'}
               </button>
             </div>
           </form>
@@ -327,11 +353,6 @@ export default function Employees() {
             <div style={{ fontSize: '14px', fontWeight: '500' }}>
               {employees.length === 0 ? 'لا يوجد موظفون بعد' : 'لا توجد نتائج للبحث'}
             </div>
-            {employees.length === 0 && departments.length > 0 && (
-              <div style={{ fontSize: '12px', color: '#bbb', marginTop: '6px' }}>
-                اضغط "موظف جديد" لإضافة أول موظف
-              </div>
-            )}
           </div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
@@ -387,9 +408,20 @@ export default function Employees() {
                       </div>
                     </td>
                     <td style={{ padding: '12px 14px' }}>
-                    <button onClick={() => handleDelete(emp._id, emp.name, emp.email)} style={{ padding: '4px 10px', background: '#FCEBEB', color: '#A32D2D', border: '1px solid #f5c2c2', borderRadius: '6px', cursor: 'pointer', fontSize: '11px' }}>
-  🗑 حذف نهائي
-</button>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button
+                          onClick={() => openEdit(emp)}
+                          style={{ padding: '4px 10px', background: '#EEEDFE', color: '#534AB7', border: '1px solid #d5d3f5', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: '500' }}
+                        >
+                          ✏ تعديل
+                        </button>
+                        <button
+                          onClick={() => handleDelete(emp._id, emp.name, emp.email)}
+                          style={{ padding: '4px 10px', background: '#FCEBEB', color: '#A32D2D', border: '1px solid #f5c2c2', borderRadius: '6px', cursor: 'pointer', fontSize: '11px' }}
+                        >
+                          🗑 حذف
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
