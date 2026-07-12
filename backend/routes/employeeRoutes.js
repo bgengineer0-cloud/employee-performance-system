@@ -1,87 +1,96 @@
 const express = require('express');
 const router = express.Router();
-const { getEmployees, getEmployee, createEmployee, updateEmployee, deleteEmployee } = require('../controllers/employeeController');
-const { protect, authorize } = require('../middleware/authMiddleware');
 const Employee = require('../models/Employee');
-router.get('/', protect, getEmployees);
-router.get('/:id', protect, getEmployee);
-router.post('/', protect, authorize('admin', 'manager'), createEmployee);
-router.put('/:id', protect, authorize('admin', 'manager'), updateEmployee);
-// جلب موظف بالإيميل
-router.get('/by-email/:email', protect, async (req, res) => {
-  try {
-    const employee = await Employee.findOne({ 
-      email: req.params.email,
-      status: { $ne: 'terminated' }
-    });
-    if (!employee) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'الموظف غير موجود' 
-      });
-    }
-    res.json({ success: true, employee });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-// GET /api/employees/my-department — موظفو قسم المدير فقط
+const Task = require('../models/Task');
+const { protect, authorize } = require('../middleware/authMiddleware');
+const {
+  getEmployees,
+  getEmployee,
+  createEmployee,
+  updateEmployee,
+} = require('../controllers/employeeController');
+
+// ── 1. GET /api/employees/my-department ─────────── مهم: قبل /:id
 router.get('/my-department', protect, async (req, res) => {
   try {
+    const userDept = req.user.department?.trim();
+    console.log('👤 Manager:', req.user.name, '| Department:', userDept);
+
+    if (!userDept) {
+      return res.status(400).json({
+        success: false,
+        message: 'لم يتم تحديد قسم لهذا المدير'
+      });
+    }
+
     const employees = await Employee.find({
-      department: req.user.department,
+      department: { $regex: new RegExp(`^${userDept}$`, 'i') },
       status: { $ne: 'terminated' }
     }).sort({ createdAt: -1 });
 
+    console.log(`✅ Found ${employees.length} employees in: ${userDept}`);
+
     const enriched = await Promise.all(
       employees.map(async (emp) => {
-        const Task = require('../models/Task');
         const tasks = await Task.find({ assignedTo: emp._id });
         const completed = tasks.filter(t => t.status === 'completed').length;
         return {
           ...emp.toObject(),
           taskCompletionRate: tasks.length > 0
-            ? Math.round((completed / tasks.length) * 100)
-            : 0,
+            ? Math.round((completed / tasks.length) * 100) : 0,
           totalTasks: tasks.length,
         };
       })
     );
 
-    res.json({ success: true, employees: enriched, department: req.user.department });
+    res.json({
+      success: true,
+      employees: enriched,
+      department: userDept,
+      total: enriched.length
+    });
   } catch (error) {
+    console.error('❌ my-department error:', error.message);
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
-// POST /api/employees/my-department — إضافة موظف لقسم المدير تلقائياً
+// ── 2. POST /api/employees/my-department ────────── مهم: قبل /:id
 router.post('/my-department', protect, authorize('manager', 'admin'), async (req, res) => {
   try {
     const User = require('../models/User');
     const bcrypt = require('bcryptjs');
 
-    const employeeId = await Employee.generateId();
+    const managerDept = req.user.department?.trim();
+    if (!managerDept) {
+      return res.status(400).json({
+        success: false,
+        message: 'لم يتم تحديد قسم لهذا المدير'
+      });
+    }
 
-    // تعيين القسم تلقائياً من قسم المدير
+    const employeeId = await Employee.generateId();
     const data = {
       ...req.body,
       employeeId,
-      department: req.user.department, // القسم يُحدد تلقائياً
+      department: managerDept,
       managerId: req.user._id,
     };
 
     if (!data.phone) delete data.phone;
     if (!data.notes) delete data.notes;
+    data.email = data.email?.toLowerCase().trim();
 
-    // التحقق من عدم تكرار الإيميل
     const existingEmp = await Employee.findOne({ email: data.email });
     if (existingEmp) {
-      return res.status(400).json({ success: false, message: 'البريد الإلكتروني مستخدم مسبقاً' });
+      return res.status(400).json({
+        success: false,
+        message: 'البريد الإلكتروني مستخدم مسبقاً'
+      });
     }
 
     const employee = await Employee.create(data);
 
-    // إنشاء حساب دخول تلقائي
     const defaultPassword = data.name.replace(/\s+/g, '').slice(0, 6) + '123';
     const existingUser = await User.findOne({ email: data.email });
     if (!existingUser) {
@@ -91,39 +100,74 @@ router.post('/my-department', protect, authorize('manager', 'admin'), async (req
         email: data.email,
         password: hash,
         role: 'employee',
-        department: req.user.department,
+        department: managerDept,
         isActive: true,
       });
     }
+
+    console.log(`✅ Employee added to "${managerDept}":`, employee.name);
 
     res.status(201).json({
       success: true,
       message: 'تم إضافة الموظف بنجاح',
       employee,
-      loginInfo: {
-        email: data.email,
-        password: defaultPassword,
-      }
+      loginInfo: { email: data.email, password: defaultPassword }
     });
   } catch (error) {
     if (error.code === 11000) {
-      return res.status(400).json({ success: false, message: 'البريد الإلكتروني مستخدم مسبقاً' });
+      return res.status(400).json({
+        success: false,
+        message: 'البريد الإلكتروني مستخدم مسبقاً'
+      });
     }
     res.status(500).json({ success: false, message: error.message });
   }
 });
-module.exports = router;
-// جلب موظف بالإيميل
+
+// ── 3. GET /api/employees/sync-department ────────── مهم: قبل /:id
+router.get('/sync-department', protect, authorize('admin'), async (req, res) => {
+  try {
+    const Department = require('../models/Department');
+    const User = require('../models/User');
+    const departments = await Department.find({ isActive: true });
+    let fixed = 0;
+
+    for (const dept of departments) {
+      if (dept.managerEmail) {
+        const user = await User.findOne({ email: dept.managerEmail });
+        if (user && user.department?.trim() !== dept.name?.trim()) {
+          user.department = dept.name.trim();
+          await user.save();
+          fixed++;
+        }
+      }
+    }
+    res.json({ success: true, fixed });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ── 4. GET /api/employees/by-email/:email ────────── مهم: قبل /:id
 router.get('/by-email/:email', protect, async (req, res) => {
   try {
     const employee = await Employee.findOne({ email: req.params.email });
+    if (!employee) {
+      return res.status(404).json({ success: false, message: 'الموظف غير موجود' });
+    }
     res.json({ success: true, employee });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
-// PUT /api/employees/:id — تعديل بيانات موظف
+// ── 5. باقي الـ Routes العامة ──────────────────────
+router.get('/', protect, getEmployees);
+router.post('/', protect, authorize('admin', 'manager'), createEmployee);
+
+// ── 6. Routes بـ /:id — يجب أن تكون أخيراً دائماً ──
+router.get('/:id', protect, getEmployee);
+
 router.put('/:id', protect, authorize('admin', 'manager'), async (req, res) => {
   try {
     const employee = await Employee.findById(req.params.id);
@@ -136,7 +180,6 @@ router.put('/:id', protect, authorize('admin', 'manager'), async (req, res) => {
     }
 
     const { name, email, department, position, phone, hireDate, status, notes } = req.body;
-
     const oldEmail = employee.email;
 
     if (name) employee.name = name.trim();
@@ -148,9 +191,11 @@ router.put('/:id', protect, authorize('admin', 'manager'), async (req, res) => {
     if (status) employee.status = status;
     if (notes !== undefined) employee.notes = notes;
 
-    // إذا تغيّر الإيميل، تحقق أنه غير مستخدم من قبل موظف آخر
     if (email && email.trim().toLowerCase() !== oldEmail) {
-      const existing = await Employee.findOne({ email: email.trim().toLowerCase(), _id: { $ne: employee._id } });
+      const existing = await Employee.findOne({
+        email: email.trim().toLowerCase(),
+        _id: { $ne: employee._id }
+      });
       if (existing) {
         return res.status(400).json({ success: false, message: 'البريد الإلكتروني مستخدم لموظف آخر' });
       }
@@ -158,7 +203,6 @@ router.put('/:id', protect, authorize('admin', 'manager'), async (req, res) => {
 
     await employee.save();
 
-    // تحديث الحساب المرتبط (User) إذا تغيّر الاسم أو الإيميل أو القسم
     const User = require('../models/User');
     const userAccount = await User.findOne({ email: oldEmail });
     if (userAccount) {
@@ -176,116 +220,51 @@ router.put('/:id', protect, authorize('admin', 'manager'), async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
-// DELETE /api/employees/:id — حذف موظف نهائياً (مع حسابه وبريده)
+
 router.delete('/:id', protect, authorize('admin', 'manager'), async (req, res) => {
   try {
+    console.log('🔍 DELETE request for employee ID:', req.params.id);
+
     const employee = await Employee.findById(req.params.id);
     if (!employee) {
       return res.status(404).json({ success: false, message: 'الموظف غير موجود' });
     }
 
-    // إذا كان مديراً يحذف موظفاً، تأكد أنه من قسمه فقط
     if (req.user.role === 'manager' && employee.department !== req.user.department) {
       return res.status(403).json({ success: false, message: 'لا يمكنك حذف موظف من قسم آخر' });
     }
 
-    console.log(`🗑 Permanently deleting employee: ${employee.name} (${employee.email})`);
-
-    // حذف المهام المرتبطة
     const Task = require('../models/Task');
-    const tasksDeleted = await Task.deleteMany({ assignedTo: employee._id });
+    await Task.deleteMany({ assignedTo: employee._id });
 
-    // حذف سجلات الحضور
     const Attendance = require('../models/Attendance');
-    const attendanceDeleted = await Attendance.deleteMany({ employee: employee._id });
+    await Attendance.deleteMany({ employee: employee._id });
 
-    // حذف التقييمات
     const Evaluation = require('../models/Evaluation');
-    const evalDeleted = await Evaluation.deleteMany({ employee: employee._id });
+    await Evaluation.deleteMany({ employee: employee._id });
 
-    // حذف حساب المستخدم المرتبط (نفس البريد) — هذا يحرر البريد للاستخدام مجدداً
     const User = require('../models/User');
     const userDeleted = await User.findOneAndDelete({ email: employee.email });
 
-    // حذف الرسائل المرتبطة بحساب هذا المستخدم
     if (userDeleted) {
       const Message = require('../models/Message');
       await Message.deleteMany({
-        $or: [
-          { sender: userDeleted._id },
-          { recipient: userDeleted._id }
-        ]
-      });
-    }
-
-    // حذف سجل الموظف نفسه نهائياً
-    await Employee.findByIdAndDelete(req.params.id);
-
-    console.log(`✅ Employee "${employee.name}" and email "${employee.email}" freed for reuse`);
-
-    res.json({
-      success: true,
-      message: `تم حذف "${employee.name}" نهائياً — يمكن استخدام بريده الإلكتروني لموظف آخر`,
-      freedEmail: employee.email,
-    });
-  } catch (error) {
-    console.error('❌ Error deleting employee:', error.message);
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-router.delete('/:id', protect, authorize('admin', 'manager'), async (req, res) => {
-  try {
-    console.log('🔍 DELETE request received for employee ID:', req.params.id);
-    
-    const employee = await Employee.findById(req.params.id);
-    if (!employee) {
-      console.log('❌ Employee not found');
-      return res.status(404).json({ success: false, message: 'الموظف غير موجود' });
-    }
-
-    console.log('✅ Found employee:', employee.name, employee.email);
-
-    if (req.user.role === 'manager' && employee.department !== req.user.department) {
-      return res.status(403).json({ success: false, message: 'لا يمكنك حذف موظف من قسم آخر' });
-    }
-
-    console.log(`🗑 Permanently deleting employee: ${employee.name} (${employee.email})`);
-
-    const Task = require('../models/Task');
-    const tasksDeleted = await Task.deleteMany({ assignedTo: employee._id });
-    console.log('🗑 Tasks deleted:', tasksDeleted.deletedCount);
-
-    const Attendance = require('../models/Attendance');
-    const attendanceDeleted = await Attendance.deleteMany({ employee: employee._id });
-    console.log('🗑 Attendance deleted:', attendanceDeleted.deletedCount);
-
-    const Evaluation = require('../models/Evaluation');
-    const evalDeleted = await Evaluation.deleteMany({ employee: employee._id });
-    console.log('🗑 Evaluations deleted:', evalDeleted.deletedCount);
-
-    const User = require('../models/User');
-    const userDeleted = await User.findOneAndDelete({ email: employee.email });
-    console.log('🗑 User account deleted:', userDeleted ? userDeleted.email : 'none found');
-
-    if (userDeleted) {
-      const Message = require('../models/Message');
-      const msgDel = await Message.deleteMany({
         $or: [{ sender: userDeleted._id }, { recipient: userDeleted._id }]
       });
-      console.log('🗑 Messages deleted:', msgDel.deletedCount);
     }
 
-    const empResult = await Employee.findByIdAndDelete(req.params.id);
-    console.log('✅✅✅ Employee deleted successfully:', empResult?.name);
+    await Employee.findByIdAndDelete(req.params.id);
+    console.log('✅ Employee deleted:', employee.name);
 
     res.json({
       success: true,
-      message: `تم حذف "${employee.name}" نهائياً — يمكن استخدام بريده الإلكتروني لموظف آخر`,
+      message: `تم حذف "${employee.name}" نهائياً`,
       freedEmail: employee.email,
     });
   } catch (error) {
-    console.error('❌❌❌ Error deleting employee:', error.message);
-    console.error(error.stack);
+    console.error('❌ Delete error:', error.message);
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
+module.exports = router;
